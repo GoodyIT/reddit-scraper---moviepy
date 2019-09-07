@@ -11,20 +11,13 @@ import re
 from pathlib import Path
 
 import numpy as np
-from skimage import transform as tf
-
 from moviepy.editor import *
-from moviepy.video.tools.segmenting import findObjects
-from moviepy.video.tools.drawing import color_gradient
-
-from moviepy.config import change_settings
-change_settings({"IMAGEMAGICK_BINARY": r"/usr/bin/convert"})
 
 post_list = []
 selected_list = []
 text_list = []
 headers = {'User-Agent': 'Mozilla/5.0'}
-post_url = "https://www.reddit.com/r/AskReddit.json"
+post_url = "https://www.reddit.com/r/{}.json"
 language = 'en'
 
 # RESOLUTION
@@ -33,18 +26,43 @@ w = 720
 h = int(w*9/16) # 16/9 screen
 moviesize = w,h
 
+start_video_file = None
+end_video_file = None
+dir_name = "my_video"
+dir_path = "."
+
 def case1():
     return re.compile("\,")
 
 # def case2():
 #     return RegexBuilder('abc', lambda x: "{}\.".format(x)).regex
 
+def read_dir():
+    print('---- parse directory structure ----\n')
+    data_dir = Path('./data')
+    for sub_dir in data_dir.iterdir():
+        if sub_dir.is_dir():
+            global dir_path
+            global dir_name
+            global start_video_file
+            global end_video_file
+            
+            dir_path = str(sub_dir)
+            dir_name = os.path.basename(str(sub_dir))
+            print('*********** Processing {} ... ***********\n'.format(dir_name))
+            for filename in sub_dir.iterdir():
+                if str(filename).find('start.mp4') != -1:
+                    start_video_file = str(filename)
+                if str(filename).find('end.mp4') != -1:
+                    end_video_file = str(filename)
+                    
+                    
 def get_page():
     # Headers to mimic a browser visit
 
     print(' --- Running the scraper ---')
     # Returns a requests.models.Response object
-    response = requests.get(post_url, headers=headers)
+    response = requests.get(post_url.format(dir_name), headers=headers)
     if response.status_code == 200:
         result = json.loads(response.content)
     
@@ -72,7 +90,7 @@ def get_comments():
     for post in selected_list:
         print('---- '+ post['idx'] +' post----')
         text_list.append(post['title'])
-        comment_url = 'https://www.reddit.com/r/AskReddit/comments/{}.json'.format(post['id'])
+        comment_url = 'https://www.reddit.com/r/{}/comments/{}.json'.format(dir_name, post['id'])
         response = requests.get(comment_url, headers=headers)
         if response.status_code == 200:
             comments = json.loads(response.content)
@@ -109,8 +127,8 @@ def create_video():
     print('/------- creating video... ---------/\n')
     # txt = "".join(text_list)
     video_clips = []
-    if Path("./start.mp4").is_file():
-        video_clips.append(CompositeVideoClip([VideoFileClip("./start.mp4")]))
+    if Path(start_video_file).is_file():
+        video_clips.append(CompositeVideoClip([VideoFileClip(start_video_file)]))
     for idx, text in enumerate(text_list):
         print(str(idx+1) + 'st text processing')
         if idx == 1:
@@ -121,10 +139,10 @@ def create_video():
             txt_clip = TextClip("Issue with text", fontsize = 70, color = 'white').set_duration(2) 
             video_clips.append(CompositeVideoClip([txt_clip]))
 
-    if Path("./end.mp4").is_file():
-        video_clips.append(CompositeVideoClip([VideoFileClip("./end.mp4")]))
+    if Path(end_video_file).is_file():
+        video_clips.append(CompositeVideoClip([VideoFileClip(end_video_file)]))
     
-    concatenate_videoclips(video_clips, method='compose').write_videofile("my_video.mp4", fps = 24, codec = 'mpeg4')
+    concatenate_videoclips(video_clips, method='compose').write_videofile('{}.mp4'.format(dir_path), fps = 24, codec = 'mpeg4')
     
 def close_clip(clip):
     try:
@@ -138,11 +156,12 @@ def close_clip(clip):
     
 if __name__ == "__main__":
     print('waiting...')
-    # create_video()
+    read_dir()
     get_page()
+    
     is_run = False
     while True:
-        choice = str(input("Scrape posts: 1. all(a) - All Posts, 2. input the post number with comma, 3. n - cancel\n"))
+        choice = str(input("\n ///--------------///\nScrape posts:\n 1). a(all) - All Posts\n 2). input the post number with comma (e.g. 1,5,8)\n 3). n - cancel\n///--------------///\n"))
         if choice.lower() == 'all' or choice.lower() == 'a':
             is_run = True
             selected_list = post_list
